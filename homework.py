@@ -3,6 +3,7 @@ import os
 import sys
 import time
 from http import HTTPStatus
+from contextlib import suppress
 
 import requests
 from dotenv import load_dotenv
@@ -11,7 +12,6 @@ from telebot.apihelper import ApiException
 from requests.exceptions import RequestException
 
 from exceptions import APIRequestError
-
 
 load_dotenv()
 
@@ -45,7 +45,7 @@ def check_tokens():
     ]
     if missing_tokens:
         message = (
-            f'Отсутствуют переменные окружения: '
+            'Отсутствуют переменные окружения: '
             f'{", ".join(missing_tokens)}'
         )
         logging.critical(message)
@@ -130,8 +130,9 @@ def main():
         except Exception as error:
             logging.exception(f'Сбой в работе программы: {error}')
             if message != last_message:
-                send_message(bot, message)
-                last_message = message
+                with suppress(ApiException):
+                    send_message(bot, message)
+                    last_message = message
         finally:
             time.sleep(RETRY_PERIOD)
 
