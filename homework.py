@@ -10,6 +10,8 @@ from telebot import TeleBot
 from telebot.apihelper import ApiException
 from requests.exceptions import RequestException
 
+from exceptions import APIRequestError
+
 
 load_dotenv()
 
@@ -48,7 +50,6 @@ def check_tokens():
         )
         logging.critical(message)
         raise ValueError(message)
-    return True
 
 
 def send_message(bot, message):
@@ -56,12 +57,6 @@ def send_message(bot, message):
     logging.debug(f'Отправка сообщения: "{message}"')
     bot.send_message(TELEGRAM_CHAT_ID, message)
     logging.debug(f'Бот отправил сообщение "{message}"')
-
-
-class APIRequestError(Exception):
-    """Ошибка запроса к API Практикума."""
-
-    pass
 
 
 def get_api_answer(timestamp):
@@ -97,11 +92,8 @@ def check_response(response):
 def parse_status(homework):
     """Извлекает статус конкретной домашней работы."""
     logging.debug('Начнем извлекать статус конкретной домашней работы')
-    missing_keys = []
-    if 'homework_name' not in homework:
-        missing_keys.append('homework_name')
-    if 'status' not in homework:
-        missing_keys.append('status')
+    required_keys = ['homework_name', 'status']
+    missing_keys = [key for key in required_keys if key not in homework]
     if missing_keys:
         raise KeyError(
             f'В ответе API отсутствуют ключи: {", ".join(missing_keys)}'
@@ -117,9 +109,7 @@ def parse_status(homework):
 
 def main():
     """Основная логика работы бота."""
-    if not check_tokens():
-        logging.critical('Отсутствуют необходимые токены!')
-        return
+    check_tokens()
     bot = TeleBot(TELEGRAM_TOKEN)
     timestamp = int(time.time())
     last_message = None
@@ -134,12 +124,14 @@ def main():
             if message != last_message:
                 send_message(bot, message)
                 last_message = message
-            if 'current_date' in response:
-                timestamp = response['current_date']
+            timestamp = response.get('current_date', timestamp)
         except (RequestException, ApiException) as error:
             logging.exception(f'Сбой при работе с внешними сервисами: {error}')
         except Exception as error:
             logging.exception(f'Сбой в работе программы: {error}')
+            if message != last_message:
+                send_message(bot, message)
+                last_message = message
         finally:
             time.sleep(RETRY_PERIOD)
 
